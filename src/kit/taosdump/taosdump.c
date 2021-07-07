@@ -77,9 +77,7 @@ enum _show_db_index {
   TSDB_SHOW_DB_WALLEVEL_INDEX,
   TSDB_SHOW_DB_FSYNC_INDEX,
   TSDB_SHOW_DB_COMP_INDEX,
-  TSDB_SHOW_DB_CACHELAST_INDEX,
   TSDB_SHOW_DB_PRECISION_INDEX,
-  TSDB_SHOW_DB_UPDATE_INDEX,
   TSDB_SHOW_DB_STATUS_INDEX,
   TSDB_MAX_SHOW_DB
 };
@@ -140,9 +138,7 @@ typedef struct {
   int8_t   wallevel;
   int32_t  fsync;
   int8_t   comp;
-  int8_t   cachelast;
   char     precision[8];   // time resolution
-  int8_t   update;
   char     status[16];
 } SDbInfo;
 
@@ -985,12 +981,10 @@ int taosDumpOut(struct arguments *arguments) {
       dbInfos[count]->wallevel = *((int8_t *)row[TSDB_SHOW_DB_WALLEVEL_INDEX]);
       dbInfos[count]->fsync = *((int32_t *)row[TSDB_SHOW_DB_FSYNC_INDEX]);
       dbInfos[count]->comp = (int8_t)(*((int8_t *)row[TSDB_SHOW_DB_COMP_INDEX]));
-      dbInfos[count]->cachelast = (int8_t)(*((int8_t *)row[TSDB_SHOW_DB_CACHELAST_INDEX]));
 
       strncpy(dbInfos[count]->precision, (char *)row[TSDB_SHOW_DB_PRECISION_INDEX],
               fields[TSDB_SHOW_DB_PRECISION_INDEX].bytes);
       //dbInfos[count]->precision = *((int8_t *)row[TSDB_SHOW_DB_PRECISION_INDEX]);
-      //dbInfos[count]->update = *((int8_t *)row[TSDB_SHOW_DB_UPDATE_INDEX]);
     }
     count++;
 
@@ -1297,10 +1291,10 @@ void taosDumpCreateDbClause(SDbInfo *dbInfo, bool isDumpProperty, FILE *fp) {
   pstr += sprintf(pstr, "CREATE DATABASE IF NOT EXISTS %s ", dbInfo->name);
   if (isDumpProperty) {
     pstr += sprintf(pstr,
-        "REPLICA %d QUORUM %d DAYS %d KEEP %s CACHE %d BLOCKS %d MINROWS %d MAXROWS %d FSYNC %d CACHELAST %d COMP %d PRECISION '%s' UPDATE %d",
+        "REPLICA %d QUORUM %d DAYS %d KEEP %s CACHE %d BLOCKS %d MINROWS %d MAXROWS %d FSYNC %d COMP %d PRECISION '%s'",
         dbInfo->replica, dbInfo->quorum, dbInfo->days, dbInfo->keeplist, dbInfo->cache,
-        dbInfo->blocks, dbInfo->minrows, dbInfo->maxrows, dbInfo->fsync, dbInfo->cachelast,
-        dbInfo->comp, dbInfo->precision, dbInfo->update);
+        dbInfo->blocks, dbInfo->minrows, dbInfo->maxrows, dbInfo->fsync,
+        dbInfo->comp, dbInfo->precision);
   }
 
   pstr += sprintf(pstr, ";");
@@ -1350,8 +1344,6 @@ void* taosDumpOutWorkThreadFp(void *arg)
     return NULL;
   }
 
-  int     fileNameIndex = 1;
-  int     tablesInOneFile = 0;
   int64_t lastRowsPrint = 5000000;
   fprintf(fp, "USE %s;\n\n", pThread->dbName);
   while (1) {
@@ -1371,32 +1363,7 @@ void* taosDumpOutWorkThreadFp(void *arg)
                 pThread->rowsOfDumpOut, pThread->dbName);
         lastRowsPrint += 5000000;
       }
-
-      tablesInOneFile++;
-      if (tablesInOneFile >= g_args.table_batch) {
-        fclose(fp);
-        tablesInOneFile = 0;
-
-        memset(tmpBuf, 0, TSDB_FILENAME_LEN + 128);
-        if (g_args.outpath[0] != 0) {
-          sprintf(tmpBuf, "%s/%s.tables.%d-%d.sql",
-                  g_args.outpath, pThread->dbName,
-                  pThread->threadIndex, fileNameIndex);
-        } else {
-          sprintf(tmpBuf, "%s.tables.%d-%d.sql",
-                  pThread->dbName, pThread->threadIndex, fileNameIndex);
-        }
-        fileNameIndex++;
-
-        fp = fopen(tmpBuf, "w");
-        if (fp == NULL) {
-          fprintf(stderr, "failed to open file %s\n", tmpBuf);
-          close(fd);
-          taos_free_result(tmpResult);
-          return NULL;
-        }
-      }
-    }
+   }
   }
 
   taos_free_result(tmpResult);
@@ -2243,15 +2210,17 @@ static FILE*  taosOpenDumpInFile(char *fptr) {
 
   char *fname = full_path.we_wordv[0];
 
-  FILE *f = fopen(fname, "r");
-  if (f == NULL) {
-    fprintf(stderr, "ERROR: failed to open file %s\n", fname);
-    wordfree(&full_path);
-    return NULL;
+  FILE *f = NULL;
+  if ((fname) && (strlen(fname) > 0)) {
+    f = fopen(fname, "r");
+    if (f == NULL) {
+      fprintf(stderr, "ERROR: failed to open file %s\n", fname);
+      wordfree(&full_path);
+      return NULL;
+    }
   }
 
   wordfree(&full_path);
-
   return f;
 }
 
