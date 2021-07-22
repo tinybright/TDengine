@@ -734,7 +734,7 @@ static int tsdbRestoreInfo(STsdbRepo *pRepo) { // TODO
           // construct the data row
           ASSERT(pTable->lastRow == NULL);
           STSchema *pSchema = tsdbGetTableSchema(pTable);
-          pTable->lastRow = taosTMalloc(schemaTLen(pSchema));
+          pTable->lastRow = taosTMalloc(dataRowMaxBytesFromSchema(pSchema));
           if (pTable->lastRow == NULL) {
             goto _err;
           }
