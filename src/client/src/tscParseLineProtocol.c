@@ -570,6 +570,41 @@ static int32_t getSmlMd5ChildTableName(TAOS_SML_DATA_POINT* point, char* tableNa
   return 0;
 }
 
+static int32_t reconsileChildTable(TAOS* taos, const char* cTableName, )
+
+static int32_t changeChildTableTagsValue(TAOS* taos, const char* cTableName, SSchema* tagSchema, TAOS_BIND* bind) {
+  char sql[512];
+  sprintf(sql, "alter table %s set tag %s=?", cTableName, tagSchema->name);
+
+  int32_t code;
+  TAOS_STMT* stmt = taos_stmt_init(taos);
+  code = taos_stmt_prepare(stmt, sql, (unsigned long)strlen(sql));
+
+  if (code != 0) {
+    tscError("%s", taos_stmt_errstr(stmt));
+    return code;
+  }
+
+  code = taos_stmt_bind_param(stmt, bind);
+  if (code != 0) {
+    tscError("%s", taos_stmt_errstr(stmt));
+    return code;
+  }
+
+  code = taos_stmt_execute(stmt);
+  if (code != 0) {
+    tscError("%s", taos_stmt_errstr(stmt));
+    return code;
+  }
+
+  code = taos_stmt_close(stmt);
+  if (code != 0) {
+    tscError("%s", taos_stmt_errstr(stmt));
+    return code;
+  }
+  return code;
+}
+
 static int32_t creatChildTableIfNotExists(TAOS* taos, const char* cTableName, const char* sTableName, SArray* tagsSchema, SArray* tagsBind) {
   size_t numTags = taosArrayGetSize(tagsSchema);
   char* sql = malloc(tsMaxSQLStringLen+1);
